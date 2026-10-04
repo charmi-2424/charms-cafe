@@ -1,11 +1,15 @@
 import React, { Suspense } from 'react';
-import { BrowserRouter, Routes, Route } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { useToast } from './hooks/useToast';
 import { ToastContainer } from './components/ui/ToastContainer';
+import { AdminRoute } from './components/layout/AdminRoute';
 
 const HomePage = React.lazy(() => import('./pages/HomePage'));
 const MenuPage = React.lazy(() => import('./pages/MenuPage'));
 const CheckoutPage = React.lazy(() => import('./pages/CheckoutPage'));
+const TrackOrderPage = React.lazy(() => import('./pages/TrackOrderPage'));
+const AdminLoginPage = React.lazy(() => import('./pages/admin/AdminLoginPage'));
+const AdminDashboard = React.lazy(() => import('./pages/admin/AdminDashboard'));
 
 const PageFallback = () => (
   <div className="min-h-screen flex items-center justify-center bg-cream">
@@ -29,6 +33,10 @@ function App() {
           <Route path="/" element={<HomePage />} />
           <Route path="/menu" element={<MenuPage />} />
           <Route path="/checkout" element={<CheckoutPage />} />
+          <Route path="/track/:displayId" element={<TrackOrderPage />} />
+          <Route path="/admin/login" element={<AdminLoginPage />} />
+          <Route path="/admin/dashboard" element={<AdminRoute><AdminDashboard /></AdminRoute>} />
+          <Route path="/admin" element={<Navigate to="/admin/dashboard" replace />} />
           <Route path="*" element={
             <div className="min-h-screen flex flex-col items-center justify-center bg-cream gap-4">
               <p className="text-6xl">☕</p>

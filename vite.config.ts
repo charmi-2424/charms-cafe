@@ -7,4 +7,21 @@ export default defineConfig({
     react(),
     tailwindcss(),
   ],
+  server: {
+    proxy: {
+      '/api': {
+        target: 'http://localhost:3001',
+        changeOrigin: true,
+        // SSE requests need buffering disabled
+        configure: (proxy) => {
+          proxy.on('proxyReq', (_proxyReq, req) => {
+            if (req.headers.accept?.includes('text/event-stream')) {
+              // Passthrough without buffering
+            }
+          });
+        },
+      },
+    },
+  },
 })
+

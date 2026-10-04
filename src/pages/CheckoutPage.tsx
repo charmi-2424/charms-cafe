@@ -129,6 +129,7 @@ const FulfillmentSelector: React.FC = () => {
 const OrderReceipt: React.FC<{ orderId: string; eta: string }> = ({ orderId, eta }) => {
   const { items, financials, fulfillment } = useCartStore();
   const { subtotal, tax, serviceCharge, tip, total } = financials();
+  const { placedDisplayId, placedTrackingToken } = useOrderStore();
   const navigate = useNavigate();
   const clearCart = useCartStore(s => s.clearCart);
 
@@ -202,19 +203,29 @@ const OrderReceipt: React.FC<{ orderId: string; eta: string }> = ({ orderId, eta
         </div>
       </div>
 
-      <div className="mt-6 flex gap-3">
-        <button
-          onClick={() => { clearCart(); navigate('/menu'); }}
-          className="btn-primary flex-1 justify-center"
-        >
-          Order Again
-        </button>
-        <button
-          onClick={() => { clearCart(); navigate('/'); }}
-          className="btn-secondary flex-1 justify-center"
-        >
-          Back to Home
-        </button>
+      <div className="mt-6 space-y-3">
+        {placedDisplayId && placedTrackingToken && (
+          <button
+            onClick={() => navigate(`/track/${placedDisplayId}?token=${placedTrackingToken}`)}
+            className="btn-primary w-full justify-center"
+          >
+            Track Your Order →
+          </button>
+        )}
+        <div className="flex gap-3">
+          <button
+            onClick={() => { clearCart(); navigate('/menu'); }}
+            className="btn-secondary flex-1 justify-center"
+          >
+            Order Again
+          </button>
+          <button
+            onClick={() => { clearCart(); navigate('/'); }}
+            className="btn-secondary flex-1 justify-center"
+          >
+            Back to Home
+          </button>
+        </div>
       </div>
     </motion.div>
   );
@@ -254,23 +265,68 @@ const CheckoutPage: React.FC = () => {
 
   const handlePayment = async () => {
     if (!validate()) return;
-    if (paymentMethod === 'cash') {
-      setStatus('processing');
-      await new Promise(r => setTimeout(r, 1200));
-      setStatus('success');
-      return;
-    }
-    // Razorpay mock flow (replace window.Razorpay with real SDK in production)
-    setStatus('processing');
-    await new Promise(r => setTimeout(r, 1000));
 
-    // In production: load Razorpay SDK, create order on backend, open Razorpay checkout
-    // For now: simulate success (80%) or failure (20%)
-    const success = Math.random() > 0.2;
-    if (success) {
+    setStatus('processing');
+
+    try {
+      const { fulfillment, items } = useCartStore.getState();
+
+      // Build API payload
+      const payload = {
+        customer: {
+          name: customer.name.trim(),
+          email: customer.email.trim(),
+          phone: customer.phone.trim(),
+          notes: customer.notes?.trim() || undefined,
+        },
+        items: items.map(ci => ({
+          menuItemId: ci.menuItem.id,
+          menuItemName: ci.menuItem.name,
+          quantity: ci.quantity,
+          unitPrice: ci.unitPrice,
+          lineTotal: ci.lineTotal,
+          selectedAddons: ci.selectedAddons,
+        })),
+        fulfillment: {
+          type: fulfillment.type,
+          tableNumber: fulfillment.tableNumber || undefined,
+          pickupTime: fulfillment.pickupTime || undefined,
+        },
+        financials: {
+          subtotal,
+          tax,
+          serviceCharge,
+          tip,
+          total,
+        },
+        paymentMethod,
+        transactionId: paymentMethod === 'cash' ? undefined : `txn_${Date.now()}_mock`, // mock txn ID for non-cash
+      };
+
+      const res = await fetch('/api/orders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error ?? 'Order submission failed');
+      }
+
+      const data = await res.json() as { orderId: string; displayId: string; trackingToken: string; estimatedReadyAt: string };
+
+      // Store tracking info in orderStore
+      useOrderStore.getState().setPlacedOrder(data);
       setStatus('success');
-    } else {
-      setStatus('failed', 'Payment was declined by the bank. Please try a different method.');
+
+      // Navigate to tracking page after a brief delay
+      setTimeout(() => {
+        navigate(`/track/${data.displayId}?token=${data.trackingToken}`);
+      }, 2000);
+
+    } catch (err) {
+      setStatus('failed', err instanceof Error ? err.message : 'Failed to place order. Please try again.');
     }
   };
 
